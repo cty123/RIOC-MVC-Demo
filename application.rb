@@ -1,4 +1,5 @@
 require 'rack'
+require 'rioc'
 require_relative 'app/controllers/base_controller'
 require_relative 'app/controllers/dogs_controller'
 
@@ -6,22 +7,29 @@ require_relative 'app/controllers/dogs_controller'
 class Application
 
   # Initialize the application class with container injected.
-  # @param container - The IOC container used to store all kinds of dependencies
-  def initialize(container)
-    @container = container
+  def initialize
+    @container = Rioc::RiocContainer.new
 
+    configure_route_map
     register_controllers
+    @container.register(:foo) { |c| "Test" }
+    @container.build_container
   end
 
-  # Parse all the controllers defined and inject them into the IOC container.
+  # Register all controllers into the IOC container.
   def register_controllers
+    @route_map.each do |route, controller|
+      @container.register(route, lazy: true) { |c| controller.injector(c) }
+    end
+  end
+
+  # Parse all the controllers defined and figure out a routing map
+  def configure_route_map
     controllers = BaseController.descendants
     route_regex = /^(?<route>[A-Z][a-z]+)Controller/
-    routes = controllers.map { |c| [c.to_s, c] }
+    @route_map = controllers.map { |c| [c.to_s, c] }
                         .map { |c, k| [route_regex.match(c)[:route].downcase, k] }
                         .to_h
-    routes['dogs'].new
-    puts routes
   end
 
   # Setup the dependencies injection for the application.
@@ -37,7 +45,14 @@ class Application
   def serve_request(request)
     Router.new(request).route!
   end
+
+  def do_work
+    dogs = @route_map['dogs'].injector(@container)
+    puts dogs
+    dogs.bark
+  end
 end
 
 puts BaseController.descendants
-Application.new(nil)
+app = Application.new
+app.do_work

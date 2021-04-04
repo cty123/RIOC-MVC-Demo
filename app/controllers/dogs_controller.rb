@@ -1,6 +1,11 @@
 class DogsController < BaseController
 
-  def initialize
+  inject :foo
+  def initialize(foo)
+    @foo = foo
+  end
 
+  def bark
+    puts @foo
   end
 end
